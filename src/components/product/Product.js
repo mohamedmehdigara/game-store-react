@@ -1,35 +1,55 @@
-import React from 'react';  
+import React from 'react';
 import PropTypes from 'prop-types';
-import { Button, ButtonToolbar} from 'react-bootstrap';
 import AlertSimple from '../controls/AlertSimple';
+import ProductForm from './ProductForm';
  
 import {bindActionCreators} from 'redux';
-import {connect} from 'react-redux';  
+import {connect} from 'react-redux';
 import * as productActions from '../../actions/productActions';
  
-class ProductList extends React.Component {
+class ProductPage extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
       hasError: false,
       error: {},
-      products: this.props.products
+      product: {id: '0', productName: '', price: '', image: process.env.API_HOST+"/images/default.png"},
+      isnew: false
     };
  
-    this.deleteRow = this.deleteRow.bind(this);
+    this.updateProductState = this.updateProductState.bind(this);
+    this.handleImageChange = this.handleImageChange.bind(this);
+    this.handleSave = this.handleSave.bind(this);
     this.handleError = this.handleError.bind(this);
   }
  
   componentWillReceiveProps(nextProps) {
     this.setState({hasError: nextProps.hasError});
     this.setState({error: nextProps.error});
-    this.setState({products: nextProps.products});
+    this.setState({product: nextProps.product});
+    this.setState({isnew: nextProps.isnew});
   }
  
-  deleteRow (event, id) {
-    if(window.confirm('Are you sure to delete this product?')){
-      let oldProduct = this.state.products.find(product => product.id == id);
-      this.props.productActions.deleteProduct(oldProduct, this.state.products);
+  updateProductState(event) {
+    const field = event.target.name;
+    const product = this.state.product;
+    product[field] = event.target.value;
+    return this.setState({product: product});
+  }
+ 
+  handleImageChange(image) {
+    const product = this.state.product;
+    product['image'] = image;
+    return this.setState({product: this.state.product});
+  }
+ 
+  handleSave(event) {
+    event.preventDefault();
+    let product = this.state.product;
+    if (this.state.isnew) {
+      this.props.productActions.createProduct(product);
+    } else {
+      this.props.productActions.updateProduct(product);
     }
   }
  
@@ -41,69 +61,82 @@ class ProductList extends React.Component {
   render() {
     let alert = '';
     if (this.state.hasError) {
-      alert = (<AlertSimple error={this.state.error}/>);
+      alert = <AlertSimple error={this.state.error}/>;
     }
-    return (
+    let pageTitle = 'Edit Product';
+    if (this.state.isnew) {
+      pageTitle = 'Create New Product';
+    }
+    return(
       <div className="container">
-        <h2>Products</h2>
-        <p>Data from Restful API</p>
+        <h2>{pageTitle}</h2>
         {alert}
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Product ID</th>
-              <th>Product Name</th>
-              <th>Price</th>
-              <th>Image</th>
-              <th>Operations</th>
-            </tr>
-          </thead>
-          <tbody>
-          {
-            this.state.products
-              .sort((a, b) => a.id < b.id)
-              .map(product => (
-                <tr key={product.id}>
-                  <td>{product.id}</td>
-                  <td>{product.productName}</td>
-                  <td>{product.price}</td>
-                  <td><img src={product.image} className="img-thumbnail" width="80" height="80"/></td>
-                  <td>
-                    <ButtonToolbar>
-                      <Button bsStyle="success" href={'/productpage/' + product.id} >Edit</Button>
-                      <Button bsStyle="danger" onClick={(e) => this.deleteRow(e, product.id)}>Delete</Button>
-                    </ButtonToolbar>
-                  </td>
-                </tr>)
-              )
-          }
-          </tbody>
-        </table>
+        <ProductForm
+          product={this.state.product}
+          isnew={this.state.isnew}
+          onChange={this.updateProductState}
+          onImageChange={this.handleImageChange}
+          onSave={this.handleSave}
+          onError={this.handleError}/>
       </div>
     );
   }
 }
  
-ProductList.propTypes = {
+ProductPage.propTypes = {
+  match: PropTypes.object.isRequired,
   history: PropTypes.object.isRequired,
   hasError: PropTypes.bool.isRequired,
   error: PropTypes.object,
-  products: PropTypes.array.isRequired,
+  product: PropTypes.object.isRequired,
+  isnew: PropTypes.bool.isRequired,
   productActions: PropTypes.object.isRequired
 };
  
+function getProductById(products, id) {
+  let product = products.find(product => product.id == id);
+  return Object.assign({}, product);
+}
+ 
 function mapStateToProps(state, ownProps) {
-  let products = state.products;
+  const pId = ownProps.match.params.id;
+  let isnew = pId == null;
+ 
+  // new product
+  let product = {id: '0', productName: '', price: '', image: process.env.API_HOST+"/images/default.png"};
+  if (pId) { //update product
+    // find product from list by id
+    product = state.products.find(product => product.id == pId);
+  }
  
   // error occurs
   let hasError = state.error !== null;
+  let error = state.error;
+ 
   if (hasError) {
-    products = state.error.products; // empty list, '[]'
+    product = state.error.product; // preserve the state in case user made change to the product
+  } else if (product == null) {
+    hasError = true;
+    error = new Error("No such product: " + pId);
+    product = {id: '0', productName: '', price: '', image: process.env.API_HOST+"/images/default.png"};
   }
+ 
+  if (product == null) {
+    hasError = false;
+    error = null;
+    product = {id: '0', productName: '', price: '', image: process.env.API_HOST+"/images/default.png"};
+  }
+ 
+  // refresh if image is uploaded, product info needs to be preserved
+  if (state.file.product) {
+    product = state.file.product;
+  }
+ 
   return {
     hasError: hasError,
-    error: state.error,
-    products: products
+    error: error,
+    product: product,
+    isnew: isnew
   };
 }
  
@@ -113,4 +146,5 @@ function mapDispatchToProps(dispatch) {
   };
 }
  
-export default connect(mapStateToProps, mapDispatchToProps)(ProductList);
+export default connect(mapStateToProps, mapDispatchToProps)(ProductPage);  
+
