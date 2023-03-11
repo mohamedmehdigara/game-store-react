@@ -1,61 +1,47 @@
-import React from "react";
-import PropTypes from "prop-types";
-import { Button, ButtonToolbar } from "react-bootstrap";
-import AlertSimple from "../controls/AlertSimple";
-import productApi from "../../api/ProductsApi";
-
-class Products extends React.Component {
+import React from 'react';  
+import PropTypes from 'prop-types';
+import { Button, ButtonToolbar} from 'react-bootstrap';
+import AlertSimple from '../controls/AlertSimple';
+ 
+import {bindActionCreators} from 'redux';
+import {connect} from 'react-redux';  
+import * as productActions from '../../actions/productActions';
+ 
+class ProductList extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
       hasError: false,
       error: {},
-      products: [],
+      products: this.props.products
     };
-
+ 
     this.deleteRow = this.deleteRow.bind(this);
     this.handleError = this.handleError.bind(this);
   }
-
-  componentDidMount() {
-    return productApi
-      .getAllProducts()
-      .then((products) => {
-        this.setState({ products: products });
-      })
-      .catch((error) => {
-        this.handleError(error);
-      });
+ 
+  componentWillReceiveProps(nextProps) {
+    this.setState({hasError: nextProps.hasError});
+    this.setState({error: nextProps.error});
+    this.setState({products: nextProps.products});
   }
-
-  deleteRow(event, id) {
-    if (window.confirm("Are you sure to delete this product?")) {
-      let oldProduct = this.state.products.find((product) => product.id == id);
-      return productApi
-        .deleteProduct(oldProduct)
-        .then(() => {
-          const products = Object.assign([], this.state.products);
-          const indexToDelete = this.state.products.findIndex((product) => {
-            return product.id == oldProduct.id;
-          });
-          products.splice(indexToDelete, 1);
-          this.setState({ products: products });
-        })
-        .catch((error) => {
-          this.handleError(error);
-        });
+ 
+  deleteRow (event, id) {
+    if(window.confirm('Are you sure to delete this product?')){
+      let oldProduct = this.state.products.find(product => product.id == id);
+      this.props.productActions.deleteProduct(oldProduct, this.state.products);
     }
   }
-
+ 
   handleError(error) {
     this.setState({ hasError: true });
     this.setState({ error: error });
   }
-
+ 
   render() {
-    let alert = "";
+    let alert = '';
     if (this.state.hasError) {
-      alert = <AlertSimple error={this.state.error} />;
+      alert = (<AlertSimple error={this.state.error}/>);
     }
     return (
       <div className="container">
@@ -73,41 +59,58 @@ class Products extends React.Component {
             </tr>
           </thead>
           <tbody>
-            {this.state.products
+          {
+            this.state.products
               .sort((a, b) => a.id < b.id)
-              .map((product) => (
+              .map(product => (
                 <tr key={product.id}>
                   <td>{product.id}</td>
                   <td>{product.productName}</td>
                   <td>{product.price}</td>
-                  <td>
-                    <img
-                      src={product.image}
-                      className="img-thumbnail"
-                      width="80"
-                      height="80"
-                    />
-                  </td>
+                  <td><img src={product.image} className="img-thumbnail" width="80" height="80"/></td>
                   <td>
                     <ButtonToolbar>
-                      <Button bsStyle="success" href={"/product/" + product.id}>
-                        Edit
-                      </Button>
-                      <Button
-                        bsStyle="danger"
-                        onClick={(e) => this.deleteRow(e, product.id)}
-                      >
-                        Delete
-                      </Button>
+                      <Button bsStyle="success" href={'/productpage/' + product.id} >Edit</Button>
+                      <Button bsStyle="danger" onClick={(e) => this.deleteRow(e, product.id)}>Delete</Button>
                     </ButtonToolbar>
                   </td>
-                </tr>
-              ))}
+                </tr>)
+              )
+          }
           </tbody>
         </table>
       </div>
     );
   }
 }
-
-export default Products;
+ 
+ProductList.propTypes = {
+  history: PropTypes.object.isRequired,
+  hasError: PropTypes.bool.isRequired,
+  error: PropTypes.object,
+  products: PropTypes.array.isRequired,
+  productActions: PropTypes.object.isRequired
+};
+ 
+function mapStateToProps(state, ownProps) {
+  let products = state.products;
+ 
+  // error occurs
+  let hasError = state.error !== null;
+  if (hasError) {
+    products = state.error.products; // empty list, '[]'
+  }
+  return {
+    hasError: hasError,
+    error: state.error,
+    products: products
+  };
+}
+ 
+function mapDispatchToProps(dispatch) {
+  return {
+    productActions: bindActionCreators(productActions, dispatch)
+  };
+}
+ 
+export default connect(mapStateToProps, mapDispatchToProps)(ProductList);
